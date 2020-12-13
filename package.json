@@ -1,7 +1,7 @@
 {
-  "name": "acmidm-login-service",
-  "version": "0.9.0",
-  "description": "Microservice to login using ACM/IDM with OpenId",
+  "name": "toevla-acmidm-login-service",
+  "version": "0.0.1",
+  "description": "Microservice to login using ACM/IDM with OpenId for toegankelijk.vlaanderen.be",
   "dependencies": {
     "@lblod/mu-auth-sudo": "^0.2.0",
     "moment": "^2.24.0",

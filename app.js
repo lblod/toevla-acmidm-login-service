@@ -4,11 +4,11 @@ import { saveLog } from './logs';
 import { getAccessToken } from './lib/openid';
 import { roleClaim, groupIdClaim, removeOldSessions, removeCurrentSession,
          ensureUserAndAccount, insertNewSessionForAccount,
-         selectAccountBySession, selectCurrentSession,
-         selectBestuurseenheidByNumber } from './lib/session';
+         selectAccountBySession, selectCurrentSession } from './lib/session';
 import request from 'request';
 
 const logsGraph = process.env.LOGS_GRAPH || 'http://mu.semte.ch/graphs/public';
+debugger;
 
 /**
  * Configuration validation on startup
@@ -19,6 +19,7 @@ const requiredEnvironmentVariables = [
   'MU_APPLICATION_AUTH_CLIENT_SECRET',
   'MU_APPLICATION_AUTH_REDIRECT_URI'
 ];
+
 requiredEnvironmentVariables.forEach(key => {
   if (!process.env[key]) {
     console.log(`Environment variable ${key} must be configured`);
@@ -71,23 +72,9 @@ app.post('/sessions', async function(req, res, next) {
     if (process.env['LOG_SINK_URL'])
       request.post({ url: process.env['LOG_SINK_URL'], body: tokenSet, json: true });
 
-    const { groupUri, groupId } = await selectBestuurseenheidByNumber(claims);
+    const { accountUri, accountId } = await ensureUserAndAccount(claims);
 
-    if (!groupUri || !groupId) {
-      console.log(`User is not allowed to login. No bestuurseenheid found for roles ${JSON.stringify(claims[roleClaim])}`);
-      saveLog(
-        logsGraph,
-        `http://data.lblod.info/class-names/no-bestuurseenheid-for-role`,
-        `User is not allowed to login. No bestuurseenheid found for roles ${JSON.stringify(claims[roleClaim])}`,
-        sessionUri,
-        claims[groupIdClaim]);
-      return res.header('mu-auth-allowed-groups', 'CLEAR').status(403).end();
-    }
-
-    const { accountUri, accountId } = await ensureUserAndAccount(claims, groupId);
-    const roles = (claims[roleClaim] || []).map(r => r.split(':')[0]);
-
-    const { sessionId } = await insertNewSessionForAccount(accountUri, sessionUri, groupUri, roles);
+    const { sessionId } = await insertNewSessionForAccount(accountUri, sessionUri);
 
     return res.header('mu-auth-allowed-groups', 'CLEAR').status(201).send({
       links: {
@@ -95,19 +82,12 @@ app.post('/sessions', async function(req, res, next) {
       },
       data: {
         type: 'sessions',
-        id: sessionId,
-        attributes: {
-          roles: roles
-        }
+        id: sessionId
       },
       relationships: {
         account: {
           links: { related: `/accounts/${accountId}` },
           data: { type: 'accounts', id: accountId }
-        },
-        group: {
-          links: { related: `/bestuurseenheden/${groupId}` },
-          data: { type: 'bestuurseenheden', id: groupId }
         }
       }
     });
@@ -157,7 +137,7 @@ app.get('/sessions/current', async function(req, res, next) {
     if (!accountUri)
       return error(res, 'Invalid session');
 
-    const { sessionId, groupId, roles } = await selectCurrentSession(accountUri);
+    const { sessionId, roles } = await selectCurrentSession(accountUri);
 
     return res.status(200).send({
       links: {
@@ -174,10 +154,6 @@ app.get('/sessions/current', async function(req, res, next) {
         account: {
           links: { related: `/accounts/${accountId}` },
           data: { type: 'accounts', id: accountId }
-        },
-        group: {
-          links: { related: `/bestuurseenheden/${groupId}` },
-          data: { type: 'bestuurseenheden', id: groupId }
         }
       }
     });
